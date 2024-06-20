@@ -1,12 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="https://www.thymeleaf.org">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" type="text/css" media="all" th:href="@{/css/bootstrap.min.css}">
     <title>Error</title>
 </head>
-<body>
-<h1>Something went wrong</h1>
-<p>We couldn't find the page you were looking for.</p>
-<a th:href="@{/}">Go to Home</a>
+<body class="p-3 mb-2 bg-light text-black">
+<div class="container">
+    <h1>Error</h1>
+    <p th:text="${errorMessage}">Something went wrong</p>
+    <a th:href="@{/home}" class="btn btn-primary">Go to Home</a>
+</div>
 </body>
 </html>

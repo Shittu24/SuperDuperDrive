@@ -52,4 +52,9 @@ public class CredentialService {
     public String decryptPassword(String encryptedPassword, String key) {
         return encryptionService.decryptValue(encryptedPassword, key);
     }
+
+    public Credential getCredentialById(Integer credentialId) {
+        return credentialMapper.getCredentialById(credentialId);
+    }
+
 }

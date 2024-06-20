@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.IOException;
+import java.util.List;
 
 @Controller
 @RequestMapping("/home")
@@ -43,12 +44,71 @@ public class HomeController {
     public String homeView(Authentication authentication, Model model) {
         String username = authentication.getName();
         Integer userId = userService.getUserId(username);
+        List<Credential> credentials = credentialService.getCredentials(userId);
+        credentials.forEach(credential -> {
+            String decryptedPassword = credentialService.decryptPassword(credential.getPassword(), credential.getKey());
+            credential.setDecryptedPassword(decryptedPassword);
+        });
 
         model.addAttribute("notes", noteService.getNotes(userId));
-        model.addAttribute("credentials", credentialService.getCredentials(userId));
+        model.addAttribute("credentials", credentials);
         model.addAttribute("files", fileService.getFiles(userId));
 
         return "home";
+    }
+
+    @PostMapping("/file")
+    public String uploadFile(Authentication authentication, @RequestParam("fileUpload") MultipartFile fileUpload, RedirectAttributes redirectAttributes) {
+        String username = authentication.getName();
+        Integer userId = userService.getUserId(username);
+
+        try {
+            if (!fileService.isFileNameAvailable(fileUpload.getOriginalFilename(), userId)) {
+                redirectAttributes.addFlashAttribute("success", false);
+                redirectAttributes.addFlashAttribute("errorMessage", "You cannot upload the same file multiple times.");
+            } else {
+                fileService.addFile(fileUpload, userId);
+                redirectAttributes.addFlashAttribute("success", true);
+            }
+        } catch (IOException e) {
+            redirectAttributes.addFlashAttribute("success", false);
+            redirectAttributes.addFlashAttribute("errorMessage", "There was an error uploading the file.");
+        }
+
+        return "redirect:/result?success=" + redirectAttributes.getFlashAttributes().get("success")
+                + "&errorMessage=" + redirectAttributes.getFlashAttributes().get("errorMessage");
+    }
+
+    @GetMapping("/file/download/{fileId}")
+    public ResponseEntity<Resource> downloadFile(@PathVariable Integer fileId, Authentication authentication) {
+        String username = authentication.getName();
+        Integer userId = userService.getUserId(username);
+
+        File file = fileService.getFile(fileId, userId);
+        if (file == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+
+        ByteArrayResource resource = new ByteArrayResource(file.getFileData());
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(file.getContentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getFilename() + "\"")
+                .body(resource);
+    }
+
+    @GetMapping("/file/delete/{fileId}")
+    public String deleteFile(@PathVariable("fileId") Integer fileId, Authentication authentication, RedirectAttributes redirectAttributes) {
+        try {
+            fileService.deleteFile(fileId);
+            redirectAttributes.addFlashAttribute("success", true);
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("success", false);
+            redirectAttributes.addFlashAttribute("errorMessage", "There was an error deleting the file.");
+        }
+
+        return "redirect:/result?success=" + redirectAttributes.getFlashAttributes().get("success")
+                + "&errorMessage=" + redirectAttributes.getFlashAttributes().get("errorMessage");
     }
 
     @PostMapping("/note")
@@ -67,6 +127,20 @@ public class HomeController {
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("success", false);
             redirectAttributes.addFlashAttribute("errorMessage", "There was an error saving the note.");
+        }
+
+        return "redirect:/result?success=" + redirectAttributes.getFlashAttributes().get("success")
+                + "&errorMessage=" + redirectAttributes.getFlashAttributes().get("errorMessage");
+    }
+
+    @GetMapping("/note/delete/{noteId}")
+    public String deleteNote(@PathVariable("noteId") Integer noteId, Authentication authentication, RedirectAttributes redirectAttributes) {
+        try {
+            noteService.deleteNote(noteId);
+            redirectAttributes.addFlashAttribute("success", true);
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("success", false);
+            redirectAttributes.addFlashAttribute("errorMessage", "There was an error deleting the note.");
         }
 
         return "redirect:/result?success=" + redirectAttributes.getFlashAttributes().get("success")
@@ -95,61 +169,6 @@ public class HomeController {
                 + "&errorMessage=" + redirectAttributes.getFlashAttributes().get("errorMessage");
     }
 
-    @GetMapping("/file/download/{fileId}")
-    public ResponseEntity<Resource> downloadFile(@PathVariable Integer fileId, Authentication authentication) {
-        String username = authentication.getName();
-        Integer userId = userService.getUserId(username);
-
-        File file = fileService.getFile(fileId, userId);
-        if (file == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-        }
-
-        ByteArrayResource resource = new ByteArrayResource(file.getFileData());
-
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(file.getContentType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getFilename() + "\"")
-                .body(resource);
-    }
-
-
-    @PostMapping("/file")
-    public String uploadFile(Authentication authentication, @RequestParam("fileUpload") MultipartFile fileUpload, RedirectAttributes redirectAttributes) {
-        String username = authentication.getName();
-        Integer userId = userService.getUserId(username);
-
-        try {
-            if (!fileService.isFileNameAvailable(fileUpload.getOriginalFilename(), userId)) {
-                redirectAttributes.addFlashAttribute("success", false);
-                redirectAttributes.addFlashAttribute("errorMessage", "You cannot upload the same file multiple times.");
-            } else {
-                fileService.addFile(fileUpload, userId);
-                redirectAttributes.addFlashAttribute("success", true);
-            }
-        } catch (IOException e) {
-            redirectAttributes.addFlashAttribute("success", false);
-            redirectAttributes.addFlashAttribute("errorMessage", "There was an error uploading the file.");
-        }
-
-        return "redirect:/result?success=" + redirectAttributes.getFlashAttributes().get("success")
-                + "&errorMessage=" + redirectAttributes.getFlashAttributes().get("errorMessage");
-    }
-
-    @GetMapping("/note/delete/{noteId}")
-    public String deleteNote(@PathVariable("noteId") Integer noteId, Authentication authentication, RedirectAttributes redirectAttributes) {
-        try {
-            noteService.deleteNote(noteId);
-            redirectAttributes.addFlashAttribute("success", true);
-        } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("success", false);
-            redirectAttributes.addFlashAttribute("errorMessage", "There was an error deleting the note.");
-        }
-
-        return "redirect:/result?success=" + redirectAttributes.getFlashAttributes().get("success")
-                + "&errorMessage=" + redirectAttributes.getFlashAttributes().get("errorMessage");
-    }
-
     @GetMapping("/credential/delete/{credentialId}")
     public String deleteCredential(@PathVariable("credentialId") Integer credentialId, Authentication authentication, RedirectAttributes redirectAttributes) {
         try {
@@ -164,17 +183,4 @@ public class HomeController {
                 + "&errorMessage=" + redirectAttributes.getFlashAttributes().get("errorMessage");
     }
 
-    @GetMapping("/file/delete/{fileId}")
-    public String deleteFile(@PathVariable("fileId") Integer fileId, Authentication authentication, RedirectAttributes redirectAttributes) {
-        try {
-            fileService.deleteFile(fileId);
-            redirectAttributes.addFlashAttribute("success", true);
-        } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("success", false);
-            redirectAttributes.addFlashAttribute("errorMessage", "There was an error deleting the file.");
-        }
-
-        return "redirect:/result?success=" + redirectAttributes.getFlashAttributes().get("success")
-                + "&errorMessage=" + redirectAttributes.getFlashAttributes().get("errorMessage");
-    }
 }
