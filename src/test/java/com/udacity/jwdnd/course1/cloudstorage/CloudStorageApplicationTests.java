@@ -9,6 +9,8 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
@@ -539,6 +541,53 @@ class CloudStorageApplicationTests {
 		List<WebElement> credentialRows = driver.findElements(By.xpath("//table[@id='credentialTable']/tbody/tr"));
 		Assertions.assertTrue(credentialRows.isEmpty());
 	}
+
+	@Test
+	public void testFileUploadAndDownload() throws InterruptedException, IOException {
+		// Sign up and log in
+		doMockSignUp("File", "UploadDownload", "FUD", "123");
+		doLogIn("FUD", "123");
+
+		// Upload a file
+		WebDriverWait webDriverWait = new WebDriverWait(driver, 10);
+		webDriverWait.until(ExpectedConditions.elementToBeClickable(By.id("nav-files-tab"))).click();
+		WebElement fileUploadInput = webDriverWait.until(ExpectedConditions.visibilityOfElementLocated(By.id("fileUpload")));
+		File file = new File("src/test/resources/testfile.txt");
+		fileUploadInput.sendKeys(file.getAbsolutePath());
+		webDriverWait.until(ExpectedConditions.elementToBeClickable(By.id("uploadButton"))).click();
+
+		// Wait for the success message and click the link to go back to the home page
+		webDriverWait.until(ExpectedConditions.visibilityOfElementLocated(By.id("success-msg")));
+		driver.findElement(By.id("success-msg")).findElement(By.tagName("a")).click();
+
+		// Verify that the file is displayed in the files list
+		webDriverWait.until(ExpectedConditions.elementToBeClickable(By.id("nav-files-tab"))).click();
+		Boolean foundFileName = webDriverWait.until(ExpectedConditions.textToBe(
+				By.xpath("//table[@id='fileTable']/tbody/tr/th"),
+				"testfile.txt")
+		);
+		Assertions.assertTrue(foundFileName);
+
+		// Download the file
+		WebElement downloadButton = webDriverWait.until(ExpectedConditions.elementToBeClickable(
+				By.xpath("//table[@id='fileTable']/tbody/tr/td/a[text()='View']")));
+		downloadButton.click();
+
+		// Wait for the file to be downloaded (this part can vary based on your setup)
+		Thread.sleep(5000);
+
+		// Verify the downloaded file content
+		File downloadedFile = new File("C:\\Users\\ibrah\\Downloads\\testfile.txt");
+		Assertions.assertTrue(downloadedFile.exists());
+		String content = new String(Files.readAllBytes(downloadedFile.toPath()));
+		Assertions.assertEquals("This is a test file.", content);
+
+		// Cleanup: Delete the downloaded file
+		if (downloadedFile.exists()) {
+			downloadedFile.delete();
+		}
+	}
+
 
 
 }
